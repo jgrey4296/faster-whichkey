@@ -2,13 +2,37 @@
 (require 'general)
 (require 'which-key)
 
+(defvar faster-whichkey-active nil)
+
 (defvar faster-whichkey--current-bindings nil)
 
 (defvar faster-whichkey-ignores-fns '(digit-argument))
 
-(define-advice general-extended-def-:which-key (:override (_state keymap key edef kargs)
-                                                          faster-whichkey)
+(defun faster-whichkey-toggle ()
+  " Toggle whether faster-whichkey is activated or not"
+  (interactive)
+  (cond (faster-whichkey-active
+         (advice-remove 'general-extended-def-:which-key  #'faster-whichkey-general-head-ad)
+         (advice-remove 'which-key--get-keymap-bindings   #'faster-whichkey--get-keymap-bindings-ad)
+         (advice-remove 'which-key--get-keymap-bindings-1 #'faster-whichkey--get-keymap-bindings-1-ad)
+         (advice-remove 'which-key--compute-binding       #'faster-whichkey--compute-binding-ad)
+         (advice-remove 'which-key--evil-operator-filter  #'faster-whichkey--evil-operator-filter-ad)
+         (setq faster-whichkey-active nil)
+         )
+        (t
+         (advice-add 'general-extended-def-:which-key  :override #'faster-whichkey-general-head-ad)
+         (advice-add 'which-key--get-keymap-bindings   :around   #'faster-whichkey--get-keymap-bindings-ad)
+         (advice-add 'which-key--get-keymap-bindings-1 :override #'faster-whichkey--get-keymap-bindings-1-ad)
+         (advice-add 'which-key--compute-binding       :override #'faster-whichkey--compute-binding-ad)
+         (advice-add 'which-key--evil-operator-filter  :override #'faster-whichkey--evil-operator-filter-ad)
+         (setq faster-whichkey-active t)
+         )
+        )
+)
+
+(defun faster-whichkey-general-head-ad (_state keymap key edef kargs)
   " An alternative which-key implementation for General.
+  Use as overriding advice on general-extended-def-:which-key
 
 Add a which-key description for KEY.
 If :major-modes is specified in EDEF, add the description for the corresponding
@@ -46,15 +70,20 @@ run on it)."
     )
   )
 
-(define-advice which-key--get-keymap-bindings (:around (fn keymap &optional start &rest args) faster-whichkey)
+(defun faster-whichkey--get-keymap-bindings-ad (fn keymap &optional start &rest args)
+  " :around Advice for which-key--get-keymap-bindings.
+Initializes 'faster-whichkey--current-bindings to 'start',
+and filters resulting bindings that are nil or empty afterwards
+  "
   (setq faster-whichkey--current-bindings start)
   (apply fn keymap start args)
-  (-filter #'(lambda (x) (s-present-p (cdr-safe x))) faster-whichkey--current-bindings)
+  (-filter #'(lambda (x) (and (cdr-safe x) (not (string-equal "" (cdr-safe x))))) faster-whichkey--current-bindings)
   )
 
-(define-advice which-key--get-keymap-bindings-1 (:override (keymap start &optional prefix filter all ignore-commands)
-                                                           faster-whichkey)
-  "See `which-key--get-keymap-bindings'."
+(defun faster-whichkey--get-keymap-bindings-1-ad (keymap start &optional prefix filter all ignore-commands)
+  " :override advice for 'which-key--get-keymap-bindings'
+    Gets bindings from a keymap, preferring faster-whichkey's pseudo-maps over the raw keymap
+"
 
   (let ((prefix-map (if prefix (lookup-key keymap prefix) keymap)))
     ;; Prefer which-key pseudo-maps:
@@ -62,13 +91,12 @@ run on it)."
       (which-key--get-keymap-bindings-1 (lookup-key prefix-map [which-key]) nil nil nil all ignore-commands))
 
     (when (keymapp prefix-map)
-        (map-keymap (-partial #'faster-whichkey-handle-binding prefix filter all ignore-commands) prefix-map))
+        (map-keymap (-partial #'faster-whichkey--handle-binding prefix filter all ignore-commands) prefix-map))
     faster-whichkey--current-bindings
     )
   )
 
-(define-advice which-key--compute-binding (:override (binding)
-                                                     faster-whichkey)
+(defun faster-whichkey--compute-binding-ad (binding)
   "Replace BINDING with remapped binding if it exists.
 
 Requires `which-key-compute-remaps' to be non-nil"
@@ -78,14 +106,16 @@ Requires `which-key-compute-remaps' to be non-nil"
           (t
            (copy-sequence (symbol-name binding))))))
 
-(define-advice which-key--evil-operator-filter (:override (binding) faster-whichkey)
+(defun faster-whichkey--evil-operator-filter-ad (binding)
   (let ((def (cdr binding)))
     (and (functionp def)
          (not (evil-get-command-property def :suppress-operator))))
   )
 
-(defun faster-whichkey-handle-binding (prefix filter all ignore-commands ev def)
-  " main discriminator to add bindings to faster-whichkey--current-bindings "
+(defun faster-whichkey--handle-binding (prefix filter all ignore-commands ev def)
+  " main discriminator to add bindings to faster-whichkey--current-bindings
+adds binding text into faster-whichkey--current-bindings instead of returning a value
+ "
   (let* ((key (vconcat prefix (list ev)))
          (key-desc (key-description key)))
     (cond
@@ -106,7 +136,7 @@ Requires `which-key-compute-remaps' to be non-nil"
      ((eq 'menu-item (car-safe def)) ;; ignore menu items (which-key--get-menu-item-binding def)
       nil)
      (def
-      (let ((binding (cons key-desc (faster-whichkey-handle-def def))))
+      (let ((binding (cons key-desc (faster-whichkey--handle-def def))))
         (when (and binding
                    (or (null filter) (and (functionp filter) (funcall filter (cons key-desc def)))))
           (push binding faster-whichkey--current-bindings))
@@ -116,13 +146,14 @@ Requires `which-key-compute-remaps' to be non-nil"
     )
   )
 
-(defun faster-whichkey-handle-def (def)
-  " handler for defs "
+(defun faster-whichkey--handle-def (def)
+  " handler for actual binding definitions to convert to text
+returns a string"
   (cond
    ((and (eq (car-safe def) 'which-key) (keymapp (cdr-safe def))) ;; ignore which-keys that are submaps without names
     nil)
    ((and (eq (car-safe def) 'which-key) (not (caddr def)))
-    (s-prepend "++" (cadr def))) ;; ++submap name
+    (concat "++" (cadr def))) ;; ++submap name
    ((eq (car-safe def) 'which-key) ;; described binding
     (cadr def))
    ((symbolp def) ;; remapped binding
@@ -157,11 +188,11 @@ of general-extended-def-:which-key
       ;;(message "adding replacement: %s : %s" pseudo-key bind)
       (if state
           (evil-define-key* state keymap pseudo-key bind)
-
-(define-key keymap pseudo-key bind)
+        (define-key keymap pseudo-key bind)
         ))
     (setq key (pop more)
-          replacement (pop more))))
+          replacement (pop more)))
+  )
 
 (defun faster-whichkey--pseudo-key (key &optional prefix)
   " create a pseudo-keystring to target which-key information
@@ -171,7 +202,9 @@ ie: [SPC d f] -> [SPC d whichkey f]
     (vconcat (or prefix (butlast seq)) [which-key] (last seq))))
 
 (defun faster-whichkey--build-pseudo-binding (desc bind)
-  "create a pseudo binding to hold a which-key description"
+  "create a pseudo binding to hold a which-key description
+literally just a list with the `which-key` symbol at the head.
+"
   (list 'which-key desc bind)
   )
 
@@ -194,10 +227,10 @@ of general-extended-def-:which-key
            )
       (if state
           (evil-define-key* state keymap pseudo-key bind)
-
-(define-key keymap pseudo-key bind)
+        (define-key keymap pseudo-key bind)
         ))
     (setq key (pop more)
-          replacement (pop more))))
+          replacement (pop more)))
+  )
 
 (provide 'faster-whichkey)
