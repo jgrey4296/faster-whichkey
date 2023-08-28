@@ -182,7 +182,7 @@ of general-extended-def-:which-key
                        replacement
                      (car-safe replacement)))
            (command (cdr-safe replacement))
-           (pseudo-key (which-key--pseudo-key (kbd key)))
+           (pseudo-key (faster-whichkey--pseudo-key (kbd key)))
            (bind (faster-whichkey--build-pseudo-binding string command))
            )
       ;;(message "adding replacement: %s : %s" pseudo-key bind)
@@ -232,5 +232,7 @@ of general-extended-def-:which-key
     (setq key (pop more)
           replacement (pop more)))
   )
+
+(defalias 'faster-whichkey-add-description-to-keymap #'faster-whichkey-add-keymap-replacement)
 
 (provide 'faster-whichkey)
