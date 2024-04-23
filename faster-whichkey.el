@@ -88,7 +88,7 @@ and filters resulting bindings that are nil or empty afterwards
   (let ((prefix-map (if prefix (lookup-key keymap prefix) keymap)))
     ;; Prefer which-key pseudo-maps:
     (when (and (keymapp prefix-map) (keymapp (lookup-key prefix-map [which-key])))
-      (which-key--get-keymap-bindings-1 (lookup-key prefix-map [which-key]) nil nil nil all ignore-commands))
+      (which-key--get-keymap-bindings-1 (lookup-key prefix-map [which-key]) nil nil filter all ignore-commands))
 
     (when (keymapp prefix-map)
         (map-keymap (-partial #'faster-whichkey--handle-binding prefix filter all ignore-commands) prefix-map))
