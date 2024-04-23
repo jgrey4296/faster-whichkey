@@ -132,7 +132,7 @@ adds binding text into faster-whichkey--current-bindings instead of returning a 
      ((and (keymapp def) (string-match-p which-key--evil-keys-regexp key-desc)) ;; ignoring evil states
       nil)
      ((and (keymapp def) (or all (and (numberp ev) (= ev 27)))) ;; event 27 is escape, so this will pick up meta
-      (which-key--get-keymap-bindings-1 keymap nil key filter all ignore-commands))
+      (which-key--get-keymap-bindings-1 def nil key filter all ignore-commands))
      ((eq 'menu-item (car-safe def)) ;; ignore menu items (which-key--get-menu-item-binding def)
       nil)
      (def
