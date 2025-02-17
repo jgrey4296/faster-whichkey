@@ -77,14 +77,16 @@ and filters resulting bindings that are nil or empty afterwards
   "
   (setq faster-whichkey--current-bindings start)
   (apply fn keymap start args)
-  (-filter #'(lambda (x) (and (cdr-safe x) (not (string-equal "" (cdr-safe x))))) faster-whichkey--current-bindings)
+  (-filter #'(lambda (x)
+               (and (cdr-safe x)
+                    (not (string-equal "" (cdr-safe x)))))
+           faster-whichkey--current-bindings)
   )
 
 (defun faster-whichkey--get-keymap-bindings-1-ad (keymap start &optional prefix filter all ignore-commands)
-  " :override advice for 'which-key--get-keymap-bindings'
+  " :override advice for 'which-key--get-keymap-bindings-1'
     Gets bindings from a keymap, preferring faster-whichkey's pseudo-maps over the raw keymap
 "
-
   (let ((prefix-map (if prefix (lookup-key keymap prefix) keymap)))
     ;; Prefer which-key pseudo-maps:
     (when (and (keymapp prefix-map) (keymapp (lookup-key prefix-map [which-key])))
@@ -119,26 +121,35 @@ adds binding text into faster-whichkey--current-bindings instead of returning a 
   (let* ((key (vconcat prefix (list ev)))
          (key-desc (key-description key)))
     (cond
-     ((assoc (key-description (list ev)) faster-whichkey--current-bindings)) ;; ignore raw binding that have already been set
-     ((assoc key-desc faster-whichkey--current-bindings)) ;; ignore bindings that have already been set
-     ((and (listp ignore-commands) (symbolp def) (memq def ignore-commands)) ;; add empty entry for ignored commands
+     ;; ignore raw binding that have already been set
+     ((assoc (key-description (list ev)) faster-whichkey--current-bindings))
+     ;; ignore bindings that have already been set
+     ((assoc key-desc faster-whichkey--current-bindings))
+     ;; add empty entry for ignored commands
+     ((and (listp ignore-commands) (symbolp def) (memq def ignore-commands))
       (push (cons key-desc "") faster-whichkey--current-bindings)
       )
      ((and (symbolp def) (memq def faster-whichkey-ignores-fns))
       (push (cons key-desc "") faster-whichkey--current-bindings)
       )
-     ((or (string-match-p which-key--ignore-non-evil-keys-regexp key-desc) (eq ev 'menu-bar)) ;; ignoring extra stuff
+     ;; ignoring extra stuff
+     ((or (string-match-p which-key--ignore-non-evil-keys-regexp key-desc) (eq ev 'menu-bar))
       nil )
-     ((and (keymapp def) (string-match-p which-key--evil-keys-regexp key-desc)) ;; ignoring evil states
+     ;; ignoring evil states
+     ((and (keymapp def) (string-match-p which-key--evil-keys-regexp key-desc))
       nil)
-     ((and (keymapp def) (or all (and (numberp ev) (= ev 27)))) ;; event 27 is escape, so this will pick up meta
+     ;; event 27 is escape, so this will pick up meta
+     ((and (keymapp def) (or all (and (numberp ev) (= ev 27))))
       (which-key--get-keymap-bindings-1 def nil key filter all ignore-commands))
-     ((eq 'menu-item (car-safe def)) ;; ignore menu items (which-key--get-menu-item-binding def)
-      nil)
+     ;; ignore menu items (which-key--get-menu-item-binding def)
+     ((eq 'menu-item (car-safe def)) nil)
+     ;; An actual definition
      (def
       (let ((binding (cons key-desc (faster-whichkey--handle-def def))))
         (when (and binding
-                   (or (null filter) (and (functionp filter) (funcall filter (cons key-desc def)))))
+                   (or (null filter)
+                       (and (functionp filter)
+                            (funcall filter (cons key-desc def)))))
           (push binding faster-whichkey--current-bindings))
         )
       )
@@ -150,20 +161,28 @@ adds binding text into faster-whichkey--current-bindings instead of returning a 
   " handler for actual binding definitions to convert to text
 returns a string"
   (cond
-   ((and (eq (car-safe def) 'which-key) (keymapp (cdr-safe def))) ;; ignore which-keys that are submaps without names
+   ;; ignore which-keys that are submaps without names
+   ((and (eq (car-safe def) 'which-key) (keymapp (cdr-safe def)))
     nil)
+   ;; ++submap name
    ((and (eq (car-safe def) 'which-key) (not (caddr def)))
-    (concat "++" (cadr def))) ;; ++submap name
-   ((eq (car-safe def) 'which-key) ;; described binding
+    (concat "++" (cadr def)))
+   ;; described binding
+   ((eq (car-safe def) 'which-key)
     (cadr def))
-   ((symbolp def) ;; remapped binding
+   ;; remapped binding
+   ((symbolp def)
     (which-key--compute-binding def))
-   ((keymapp def) "prefix") ;; unnamed submap
-   ((eq 'lambda (car-safe def)) "+lambda") ;; unnamed lambda
-   ((eq 'closure (car-safe def)) "+closure") ;; unnamed closure
+   ;; unnamed submap
+   ((keymapp def) "prefix")
+   ;; unnamed lambda
+   ((eq 'lambda (car-safe def)) "+lambda")
+   ;; unnamed closure
+   ((eq 'closure (car-safe def)) "+closure")
    ((stringp def) def)
    ((vectorp def) (key-description def))
-   ((and (consp def) (stringp (car def))) ;; looking for (STRING . DEFN)
+   ;; looking for (STRING . DEFN)
+   ((and (consp def) (stringp (car def)))
     (concat (when (keymapp (cdr-safe def)) "group:")
             (car def)))
    (t "unknown"))
