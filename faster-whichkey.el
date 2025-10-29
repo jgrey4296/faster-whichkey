@@ -1,4 +1,20 @@
-;;; faster-whichkey.el -*- lexical-binding: t; -*-
+;;; faster-whichkey.el --- Makes startup with whichkey faster -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025 john
+;;
+;; Author: john <https://github.com/jgrey4296>
+;; Created: October 29, 2025
+;; Modified: October 29, 2025
+;; Version: 1.0.0
+;; Keywords:
+;; Homepage: https://github.com/jgrey4296/faster-whichkey
+;; Package-Requires: ((emacs "30.2") (general) (which-key))
+;; Package written on: ((emacs 30.2))
+;;
+;; This file is not part of GNU Emacs.
+;;
+
+;;; Commentary:
 (require 'general)
 (require 'which-key)
 
@@ -255,3 +271,4 @@ of general-extended-def-:which-key
 (defalias 'faster-whichkey-add-description-to-keymap #'faster-whichkey-add-keymap-replacement)
 
 (provide 'faster-whichkey)
+;;; faster-whichkey.el ends here
