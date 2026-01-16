@@ -7,7 +7,8 @@
 (website-url "https://github.com/jgrey4296/faster-whichkey")
 (keywords )
 
-(package-file "faster-whichkey.el")
+(package-descriptor "faster-whichkey-pkg.el")
+(files "faster-whichkey.el")
 
 (script "test" "echo \"Error: no test specified\" && exit 1")
 
